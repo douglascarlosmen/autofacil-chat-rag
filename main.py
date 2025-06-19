@@ -9,6 +9,8 @@ from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain.schema import Document
 from langchain_core.prompts import PromptTemplate
 from langchain.chains import RetrievalQA
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 
 load_dotenv()
 
@@ -73,6 +75,14 @@ async def ingest_file(request: Request):
         "arquivo": filename,
         "chunks_indexados": len(documents)
     }
+
+# Servir arquivos estáticos (como HTML)
+app.mount("/static", StaticFiles(directory="static"), name="static")
+
+# Rota para acessar o chat
+@app.get("/chat")
+def get_chat():
+    return FileResponse("static/chat.html")
 
 @app.post("/chat")
 async def chat_rag(payload: dict = Body(...)):

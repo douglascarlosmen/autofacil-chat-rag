@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AutoFácil - Assistente</title>
+    <link href="https://cdn.replit.com/agent/bootstrap-agent-dark-theme.min.css" rel="stylesheet">
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: var(--bs-dark);
+            color: var(--bs-light);
+        }
+        
+        .chat-container {
+            max-width: 600px;
+            margin: 0 auto;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .chat-header {
+            padding: 1rem;
+            text-align: center;
+            border-bottom: 1px solid var(--bs-secondary);
+            background-color: var(--bs-dark);
+        }
+        
+        .chat-messages {
+            flex: 1;
+            overflow-y: auto;
+            padding: 1rem;
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+        
+        .message {
+            max-width: 80%;
+            padding: 0.75rem 1rem;
+            border-radius: 1rem;
+            word-wrap: break-word;
+        }
+        
+        .message.user {
+            align-self: flex-end;
+            background-color: var(--bs-primary);
+            color: white;
+        }
+        
+        .message.assistant {
+            align-self: flex-start;
+            background-color: var(--bs-secondary);
+            color: var(--bs-light);
+        }
+        
+        .message-label {
+            font-weight: bold;
+            font-size: 0.85rem;
+            margin-bottom: 0.25rem;
+            opacity: 0.8;
+        }
+        
+        .message-content {
+            margin: 0;
+        }
+        
+        .chat-input-container {
+            padding: 1rem;
+            border-top: 1px solid var(--bs-secondary);
+            background-color: var(--bs-dark);
+        }
+        
+        .input-group {
+            max-width: 100%;
+        }
+        
+        .loading-indicator {
+            display: none;
+            text-align: center;
+            padding: 0.5rem;
+            color: var(--bs-info);
+            font-style: italic;
+        }
+        
+        .error-message {
+            background-color: var(--bs-danger);
+            color: white;
+            padding: 0.75rem 1rem;
+            border-radius: 0.5rem;
+            margin: 0.5rem 0;
+            text-align: center;
+        }
+        
+        @media (max-width: 768px) {
+            .chat-container {
+                max-width: 100%;
+                margin: 0;
+            }
+            
+            .message {
+                max-width: 90%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container-fluid">
+        <div class="chat-container">
+            <!-- Chat Header -->
+            <div class="chat-header">
+                <h3 class="mb-0">AutoFácil</h3>
+                <small class="text-muted">Assistente da Empresa</small>
+            </div>
+            
+            <!-- Chat Messages -->
+            <div class="chat-messages" id="chatMessages">
+                <div class="message assistant">
+                    <div class="message-label">AutoFácil:</div>
+                    <p class="message-content">Olá! Como posso ajudá-lo hoje?</p>
+                </div>
+            </div>
+            
+            <!-- Loading Indicator -->
+            <div class="loading-indicator" id="loadingIndicator">
+                AutoFácil está digitando...
+            </div>
+            
+            <!-- Chat Input -->
+            <div class="chat-input-container">
+                <div class="input-group">
+                    <input 
+                        type="text" 
+                        class="form-control" 
+                        id="messageInput" 
+                        placeholder="Digite sua mensagem..."
+                        maxlength="500"
+                    >
+                    <button class="btn btn-primary" type="button" id="sendButton">
+                        Enviar
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        class ChatInterface {
+            constructor() {
+                this.chatMessages = document.getElementById('chatMessages');
+                this.messageInput = document.getElementById('messageInput');
+                this.sendButton = document.getElementById('sendButton');
+                this.loadingIndicator = document.getElementById('loadingIndicator');
+                
+                this.initializeEventListeners();
+            }
+            
+            initializeEventListeners() {
+                // Send button click
+                this.sendButton.addEventListener('click', () => {
+                    this.sendMessage();
+                });
+                
+                // Enter key press
+                this.messageInput.addEventListener('keypress', (e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
+                        this.sendMessage();
+                    }
+                });
+                
+                // Auto-resize input and prevent empty messages
+                this.messageInput.addEventListener('input', () => {
+                    const message = this.messageInput.value.trim();
+                    this.sendButton.disabled = message.length === 0;
+                });
+                
+                // Initial button state
+                this.sendButton.disabled = true;
+            }
+            
+            async sendMessage() {
+                const message = this.messageInput.value.trim();
+                
+                if (!message) {
+                    return;
+                }
+                
+                // Disable input while processing
+                this.setInputState(false);
+                
+                // Add user message to chat
+                this.addMessage('user', message);
+                
+                // Clear input field
+                this.messageInput.value = '';
+                
+                // Show loading indicator
+                this.showLoading(true);
+                
+                try {
+                    // Send request to backend API
+                    const response = await fetch('/chat', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            question: message
+                        })
+                    });
+                    
+                    if (!response.ok) {
+                        throw new Error(`Erro HTTP: ${response.status} - ${response.statusText}`);
+                    }
+                    
+                    const data = await response.json();
+                    
+                    // Validate response structure
+                    if (!data || typeof data.resposta !== 'string') {
+                        throw new Error('Resposta inválida do servidor');
+                    }
+                    
+                    // Add assistant response to chat
+                    this.addMessage('assistant', data.resposta);
+                    
+                } catch (error) {
+                    console.error('Erro ao enviar mensagem:', error);
+                    this.showError(error);
+                } finally {
+                    // Hide loading indicator and re-enable input
+                    this.showLoading(false);
+                    this.setInputState(true);
+                    this.messageInput.focus();
+                }
+            }
+            
+            addMessage(sender, content) {
+                const messageDiv = document.createElement('div');
+                messageDiv.className = `message ${sender}`;
+                
+                const label = sender === 'user' ? 'Você:' : 'AutoFácil:';
+                
+                messageDiv.innerHTML = `
+                    <div class="message-label">${label}</div>
+                    <p class="message-content">${this.escapeHtml(content)}</p>
+                `;
+                
+                this.chatMessages.appendChild(messageDiv);
+                this.scrollToBottom();
+            }
+            
+            showError(error) {
+                const errorDiv = document.createElement('div');
+                errorDiv.className = 'error-message';
+                
+                let errorMessage = 'Desculpe, ocorreu um erro ao processar sua mensagem. ';
+                
+                if (error.message.includes('Failed to fetch')) {
+                    errorMessage += 'Verifique sua conexão com a internet e tente novamente.';
+                } else if (error.message.includes('HTTP')) {
+                    errorMessage += 'O servidor está temporariamente indisponível.';
+                } else {
+                    errorMessage += 'Tente novamente em alguns instantes.';
+                }
+                
+                errorDiv.textContent = errorMessage;
+                this.chatMessages.appendChild(errorDiv);
+                this.scrollToBottom();
+                
+                // Remove error message after 5 seconds
+                setTimeout(() => {
+                    if (errorDiv.parentNode) {
+                        errorDiv.parentNode.removeChild(errorDiv);
+                    }
+                }, 5000);
+            }
+            
+            setInputState(enabled) {
+                this.messageInput.disabled = !enabled;
+                this.sendButton.disabled = !enabled || this.messageInput.value.trim().length === 0;
+            }
+            
+            showLoading(show) {
+                this.loadingIndicator.style.display = show ? 'block' : 'none';
+                if (show) {
+                    this.scrollToBottom();
+                }
+            }
+            
+            scrollToBottom() {
+                // Use setTimeout to ensure DOM updates are complete
+                setTimeout(() => {
+                    this.chatMessages.scrollTop = this.chatMessages.scrollHeight;
+                }, 10);
+            }
+            
+            escapeHtml(text) {
+                const div = document.createElement('div');
+                div.textContent = text;
+                return div.innerHTML;
+            }
+        }
+        
+        // Initialize chat interface when DOM is loaded
+        document.addEventListener('DOMContentLoaded', () => {
+            new ChatInterface();
+        });
+    </script>
+</body>
+</html>
