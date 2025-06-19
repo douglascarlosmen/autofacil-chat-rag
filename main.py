@@ -67,6 +67,9 @@ async def ingest_file(request: Request):
         Document(page_content=chunk, metadata={"source": filename})
         for chunk in chunks
     ]
+    
+    # Remove documentos antigos com o mesmo "source" (nome do arquivo)
+    vectorstore.delete(where={"source": filename})
 
     vectorstore.add_documents(documents)
 
