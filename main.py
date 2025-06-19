@@ -2,11 +2,13 @@ import os
 import base64
 import fitz  # PyMuPDF
 from dotenv import load_dotenv
-from fastapi import FastAPI, Request
-from langchain_openai import OpenAIEmbeddings
+from fastapi import FastAPI, Request, Body
+from langchain_openai import OpenAIEmbeddings, ChatOpenAI
 from langchain_chroma import Chroma
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain.schema import Document
+from langchain_core.prompts import PromptTemplate
+from langchain.chains import RetrievalQA
 
 load_dotenv()
 
@@ -70,4 +72,49 @@ async def ingest_file(request: Request):
         "status": "sucesso",
         "arquivo": filename,
         "chunks_indexados": len(documents)
+    }
+
+@app.post("/chat")
+async def chat_rag(payload: dict = Body(...)):
+    question = payload.get("question", "")
+
+    if not question.strip():
+        return {"erro": "pergunta não informada"}
+
+    # Definir prompt com instruções claras para o LLM
+    prompt = PromptTemplate(
+        input_variables=["context", "question"],
+        template="""
+            Você é um assistente da empresa AutoFácil Veículos.
+            Responda à pergunta com base nos documentos internos da empresa.
+            Se a resposta não estiver nos documentos, diga: "Essa informação não está disponível no momento."
+
+            Contexto:
+            {context}
+
+            Pergunta: {question}
+            Resposta:"""
+    )
+
+    # LLM (gpt-3.5)
+    llm = ChatOpenAI(
+        temperature=0,
+        model="gpt-3.5-turbo",
+        openai_api_key=os.getenv("OPENAI_API_KEY")
+    )
+
+    # Criar chain de RAG com retriever (Chroma)
+    qa_chain = RetrievalQA.from_chain_type(
+        llm=llm,
+        retriever=vectorstore.as_retriever(),
+        chain_type="stuff",
+        chain_type_kwargs={"prompt": prompt}
+    )
+
+    # Executar resposta
+    resposta = qa_chain.run(question)
+
+    return {
+        "pergunta": question,
+        "resposta": resposta
     }
